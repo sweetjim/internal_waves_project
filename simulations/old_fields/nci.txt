@@ -1,0 +1,124 @@
+A guide to using the NCI.
+James Sweetman
+___________________________________________________________________________________
+___________________________________________________________________________________
+INITIALISATION:
+
+1. Open Ubuntu
+2. Sign into the NCI via 'gadi' -- which is equivalent to: ssh js8285@gadi.nci.org.au
+3. Enter 'jks@NCI1'
+4. If prompted with sudo password, enter 'password'
+
+We are now in the home directory, eq. to: cd ~
+There are three primary directories: 
+	(i) gdata, where our parameter fields, like bathymetery, go;
+	(ii) payu, where the new experiments are developed and saved; and
+	(iii) scratch, where experiments are temporarily stored.
+
+___________________________________________________________________________________
+___________________________________________________________________________________
+EXPERIMENTAL PROCEDURE:
+
+
+The procedure for writing a new experiment is as follows:
+
+Upload the desired bathymetry to gdata. Make a new experiment directory and
+copy the original experiment 'testrun' into it. Change 'config.yaml' with the
+text editor to the new experimental conditions. 
+
+
+Then verify the new files existwith 'payu setup'. If ready, 'payu sweep' then 'payu run' to queue the experiment.
+Use 'gfdstat' to monitor the progress of the experiment. Once out of the queue, use 'cat work/STDOUT.0000' to 
+verify there is timesteps. Also check 'ncview work/mnc_0001/state.00... .nc' for real outputs.
+
+To view the output, goto: payu/runname/archive
+Then with Xming running, ncview/output###/state.00... .nc
+
+FAILURE HANDLING:
+If the simulation fails, remove the project folder within the work folder. Also remove any
+associated .e... or .o... files with differing project name in the payu superfolder.
+
+Also execute this from the working directory: 'rm -r archive/output000/' and 'rm -r archive/restart000'
+
+SPIN UP HANDLING:
+To re-run the model beyond its last state, execute: 'payu run -n x' where 'x' is the number of repeats!
+
+
+
+
+___________________________________________________________________________________
+___________________________________________________________________________________
+ENVIRONMENT SETUP:
+
+http://mitgcm.org/public/r2_manual/latest/online_documents/node101.html
+
+
+The environment conditions can be defined within the config.yaml file.
+Under 'Continuous equation parameters' you can change:
+	Bottom density: rhoConst
+	Tidal forcing amplitude: tidalForcingU
+	Tidal forcing frequency: tidalFreq
+	Mean current forcing: meanForcingV (orthogonal forcing to Coriolis force f0)
+	TAlpha = temperature coefficient
+	sBeta = salinity coefficient
+	
+Under 'Time stepping parameters' you can change:
+	Time increment in seconds: deltaT
+	Time iterations: nTimeSteps
+	Binning time in seconds (which are saved): dumFreq
+	
+Under 'Gridding parameters' you can change:
+	Vertical length in meters: delZ
+	Spatial steps: dYspacing and dXspacing 
+		(must be similar and divisible by the number of cpu threads (128 = 16cpus * 4cores))
+		(12.5km width / 128 threads = 97.6563m/thread)
+
+Under 'Input datasets' you can change:
+	Topography file: bathyFile
+		import .field files to scratch/.../mitgcm_input
+___________________________________________________________________________________
+___________________________________________________________________________________
+COMMANDS:
+
+NAVIGATION:
+
+
+cd ~ 		= go to home directory
+ls 		= list directories
+cd filename/	= enter filename directory
+cd ../		= return up one directory
+
+cd /mnt/drive 	= go to the specified hard drive directory
+
+BASIC:
+ln -s /pathname title 		= link pathname to title
+cat ~/.file			= concatanate file
+vim ~/.file 			= 
+source ~/.file 			= 	
+cp path/file/* newpath/. 	= copy file to newpath (leave out newpath already there)
+vim file 		= open text editor
+	i 		= insert
+	esc 		= exit insert
+	w 		= write to file
+	q 		= quit text editor
+cat file 	= print the file to the terminal
+rm file 	= remove file
+
+qdel 'jobname'
+
+
+
+___________________________________________________________________________________
+___________________________________________________________________________________
+MATLAB
+
+To run MATLAB on the terminal, you must bash:
+qsub -I -X -P nm03 -l walltime=10:00:00 -q express -l ncpus=1 -l mem=8GB -l storage=gdata/nm03+scratch/nm03+gdata/hh5 -l software=matlab_anu 
+
+From here, you may either load the terminal, command-line version:
+module -nodesktop
+
+Or the GUI version:
+module load matlab_licence
+matlab -nosplash
+

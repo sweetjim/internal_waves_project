@@ -1,0 +1,41 @@
+    %%  Image Processing for visualizing dynamics of internal tides
+    %   Modified version of Yvan Dossman's and Callum Shaw's scripts.
+    %   The Australian National University, Research School of Earth Sciences
+    %   Climate and Fluid Physics Group
+    %   James Sweetman, February, 2020  
+    
+    
+    %% Preamble
+    path2routines       = cd;
+    path2subroutines    =  
+    
+    
+    %%  Loading experimental data
+
+    run dataRoutine
+    
+    %% Background image (Ixo) 
+    % Using the Beer-Lambert law; relating tracer concentration to light
+    % absorption (Dossmann et al. 2016), the density profile may be
+    % extracted from the intial state image.
+    
+    run backgroundRoutine
+ 
+    %% Foreground images (Ix)
+    % Subtraction of the transiting images intensity profile from the
+    % initial image is used to form a density anomaly profile. This is
+    % iterated for all selected transit images and saved as a movie frame
+    % with figure details added.
+    
+    run foregroundRoutine
+    run processingRoutine
+    
+    %% Video processing
+    % Each saved movie frame is passed through MATLAB's video writer.
+    
+    run outputRoutine
+    
+    %% Save workspace
+    clear imageframes
+    savingpath = char(strcat(exppath,'\run',num2str(numexp),'_workspace.mat'));
+ 

@@ -1,0 +1,102 @@
+%% Preamble routine
+    
+% Choose whether to analyse a batch of experiments or a singular experiment
+   
+%     batch_prompt = questdlg('Batch a selection of runs or a single run?', ...
+%     'Experiment analysis', ...
+%     'Batch','Single','Cancel');
+
+%     switch batch_prompt
+%         case 'Batch'
+%             disp('Batching selected.')
+%             batching = true;
+%         case 'Single'
+%             disp('Single run selected.')
+%             batching = false;
+%     end
+%     
+%     if isempty(batch_prompt)
+%         disp('Stopping script')
+%         return
+%     end
+    
+    name = readcell('records.xlsx','sheet','records');
+    data = xlsread('records.xlsx','records');
+    
+%     if batching
+        temporal_prompt = questdlg('What would you like to process?', ...
+        'Experiment analysis', ...
+        'Short-term transits','Long-term transits','Cancel');
+
+        switch temporal_prompt
+            case 'Short-term transits'
+                disp('Short-term transits selected.')
+                temporal_transits = false;
+            case 'Long-term transits'
+                disp('Long-term transits selected.')
+                temporal_transits = true;
+        end
+
+        prompt = {'Range of runs:','Specific runs:'};
+        dlgtitle = 'Input';
+        dims = [1 35];
+        definput = {'',''};
+        answer = inputdlg(prompt,dlgtitle,dims,definput);
+        
+        if isempty(answer)
+            disp('Stopping script')
+            return
+        end
+        
+        if ~isnan(find(answer{1},1))
+            range_runs = split(answer{1},'-');
+            range_runs = [str2double(range_runs{1}):str2double(range_runs{2})];
+            runs = range_runs;
+        elseif ~isnan(find(answer{2},1))
+            specific_runs = str2double(split(answer{2},','));
+            runs = specific_runs;
+        end
+        
+        if ~isempty(answer{1})&&~isempty(answer{2})
+            runs = union(range_runs,specific_runs);
+        end
+                
+        if temporal_transits
+            if ~isempty(answer{1})
+            % Find the 1's
+                selected_runs = find(data(runs,16),length(runs));
+            else
+                selected_runs = runs;
+            end
+        else
+            if ~isempty(answer{1})
+            % Find the 0's
+                selected_runs = find(~data(runs,16),length(runs));
+            else
+                selected_runs = runs;
+                if data(runs,16)
+                    disp('You have selected a long-term transit run.')
+                end
+            end
+        end
+        
+% %     else
+%         prompt = {'Specific run:'};
+%         dlgtitle = 'Input';
+%         dims = [1 35];
+%         definput = {''};
+%         answer = inputdlg(prompt,dlgtitle,dims,definput);
+%         
+%         if isempty(answer)
+%             disp('Stopping script')
+%             return
+%         end
+%         
+%         runs = str2double(answer);
+%         selected_runs = runs;
+%         
+        
+%         
+%     end
+    
+    experiment_path = {(name{selected_runs+1,1})};

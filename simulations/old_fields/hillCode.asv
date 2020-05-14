@@ -1,0 +1,168 @@
+%% Topography and stratification code
+% Code that exports different .field files for usage in gadi. 
+
+ieee    = 'b' ; 
+accuracy= 'real*8' ; 
+RPS2ms  = 0.0359;
+
+g       = 9.81; % m/s2
+rho_ref = [1020 1004];
+alphaT  = 2e-4; % 1/T
+betaS   = 0.71e-3;  % 1/psu
+
+
+% grid size 
+nx  = 1024; % pts
+ny  = 1;    % pts
+nz  = 300;  % pts
+Lx  = 5;    % m
+H1  = 0.3;  % m
+z   = -linspace(0,H1,nz+1); 
+z   = (z(1:end-1)+z(2:end))/2; 
+
+N2      = g/rho_ref(2)*(rho_ref(1)-rho_ref(2))/H1; % Buoyancy frequency squared
+u       = 0.01 * RPS2ms;    % Mean current in RPS
+ut      = 0.05 * RPS2ms;    % Tidal forcing in RPS
+omega   = 1/8.2 * 2*pi;     % Forcing frequency in T (s)
+
+
+%% Topography and variable resolution
+% Draw a varying horizontal resolution that increases near the hills
+x   = linspace(0,Lx,nx+1); 
+
+n1  = 0:nx-1;
+res = 0.01; % m
+func    = @(x,x0,w0,h0) h0*exp(-(x-x0).^2/w0);
+res_func = @(n1,nx,x0,x1) 1+tanh((n1-x0*nx)/x1);
+
+sep     = 0.05;
+sep_array   = sep*[1:4];
+
+j = 1;
+pos     = (Lx/2+[sep+sep_array(j),-sep-sep_array(j)]);
+res_pos = 0.5+0.3*(1+4*sep)*[-1 1];
+
+w0      = 1e-3;
+res_w0  = 50;
+
+h0      = 0.06;
+res_space   = res_func(n1,nx,res_pos(1),res_w0)-res_func(n1,nx,res_pos(2),res_w0);
+hill_space  = H+func(x,pos(1),w0,h0)+func(x,pos(2),w0,h0);
+
+clf
+subplot(2,2,1)
+    yyaxis left
+    plot(x,hill_space)
+    title('Resolving space')
+    ylabel('Height (m)')
+    xlabel('Position (m)')
+    ylim([H 0])
+    xlim([0 Lx])
+
+dx  = res+(1e-3-res)/2*res_space;
+x   = cumsum(dx)/sum(dx)*Lx; % Normalize x
+dx  = diff(x);
+dx  = [dx dx(end)]; % Add missing index
+x   = x(1:(nx));
+
+dx_phrase = sprintf('dx_%d_mm.field',round(res*1e3));
+fid = fopen(dx_phrase, 'w' ,ieee); 
+fwrite(fid,dx,accuracy); 
+fclose(fid); 
+
+yyaxis right
+    plot(x,dx*1e3)
+    ylim([min(dx) max(dx)*1.02]*1e3)
+    ylabel('Resolution (mm)')
+
+% x       = linspace(0,Lx,nx+1); 
+
+H       = min(z); 
+h0      = 0.06;
+
+for i=1:length(sep_array)
+    pos = (Lx/2+[sep+sep_array(i),-sep-sep_array(i)]);
+    h   = H+func(x,pos(1),w0,h0)+func(x,pos(2),w0,h0); % Scaling
+    subplot(2,2,2)
+    title('Hill seperations')
+    plot(x,h); hold on;
+    xlabel('Position (m)')
+    ylabel('Height (m)')
+    ylim([H 0])
+    xlim([2 3])
+    
+    hill_phrase = sprintf( 'dh_%d_cm' ,round(sep_array(1)*1e2));
+    fid = fopen(hill_phrase, 'w' ,ieee); 
+    fwrite(fid,h,accuracy);
+    fclose(fid);
+end 
+
+
+
+
+%% Stratification and initial velocity field
+
+% make uniform strat 
+
+% rho = rho_0(1+beta(delS)) -> drho/dz/rho_0 = (beta(dS/dz)), 
+% N2/g =  drho/dz/rho_0 -> N2/g = beta(dS/dz)
+Sref    = 21;
+dSdz    = N2/(-betaS*g); % 
+[X,Z]   = ndgrid(x,z); 
+S       = dSdz*(Z+H1)+Sref; % Isopyncals every ~4.5m
+
+S_phrase  = sprintf('S_rho_%d_%d.field',round(rho_ref(2)),round(rho_ref(1)));
+
+fid     = fopen(S_phrase , 'w' ,ieee); % Change for S.field
+fwrite(fid,S,accuracy); 
+fclose(fid); 
+
+% initial v, match mean forcing to impulse
+[X,Z]   = ndgrid(x,z);
+
+mean    = u;
+omega0  = omega;
+f0      = 1e-4;
+F0      = 1e-6;
+F0_meanV= 2e-6;
+u0      = omega0/(f0^2-omega0^2)*F0 + F0_meanV/f0; % Initial forcing velocity
+v0_phrase = sprintf('v0_%d_mm_p_s.field',round(u0*1e3));
+fid     = fopen('v0.field','w',ieee); 
+fwrite(fid,u0*ones(size(X)),accuracy); 
+fclose(fid);
+
+%% Plotting
+
+subplot(2,2,3)
+    yyaxis left
+    plot(z,S(1,:))
+    title('Salinity profile')
+    xlabel('Height (m)')
+    ylabel('Salinity (psu)')
+    
+dim = [.15 .25 .8 .28];
+str = sprintf('Initial velocity = %0.3f mm/s = %0.3f RPS',u0*1e3,u0/RPS2ms);
+annotation('textbox',dim,'String',str,'FitBoxToText','on');
+
+yyaxis right
+    rho = rho_ref(2)*(1+betaS*(S(1,:)-S(1,1)));
+    plot(z,rho)
+    ylabel('Density (kg/m^3)')
+%% Data file inputs
+delete data
+copyfile data_blank data
+fid = fopen('data');
+txt = textscan(fid,'%s','delimiter','\n');
+fclose(fid);
+txt{strrep('f0=1.0E-4','1.0E-4',num2str(f0))
+strrep('rhoConst=1026.5','1026.5',num2str(rho_ref(1)))
+strrep('rhoNil=1026.5','1026.5',num2str(rho_ref(1)))
+strrep('tidalForcingU=1.0E-6','1.0E-6',num2str(ut*1e-3))
+strrep('tidalFreq=1.41E-4','1.41E-4',num2str(omega0))
+strrep('meanForcingV=2E-6','2E-6',num2str(u0*1e-3))
+strrep('dYspacing=.001','.001',num2str(res*1e-1))
+strrep( "delXfile = 'dx.field'",'dx.field',dx_phrase)
+strrep("bathyFile='double_hill1_spaced.field'",'double_hill1_spaced.field',hill_phrase)
+strrep("hydrogSaltFile = 'Sinit_N_7e1.field'",'Sinit_N_7e1.field',S_phrase)
+strrep("uVelInitFile='v0.field'",'v0.field',v0_phrase)
+

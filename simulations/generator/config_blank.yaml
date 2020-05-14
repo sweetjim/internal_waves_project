@@ -1,0 +1,27 @@
+queue: normal
+# qsub_flags: -lother=hyperthread
+project: nm03
+walltime: 5:00:00
+ncpus: 16
+mem: 32GB
+jobname: lm
+collate_walltime: 10:00:00
+collate_mem: 2GB
+# postscript: /home/157/ixr157/scripts/jobs/run_extract
+restart_history: 10
+model: mitgcm
+shortpath: /scratch/nm03/js8285/mitgcm_output/
+exe: mitgcmuv_topo2d_1024x_300z_16cpu
+qsub_flags: -W umask=027 
+
+# exe: mitgcmuv_880x520_8constit_128cpu
+input: /scratch/nm03/js8285/mitgcm_input/
+
+
+runlog: true
+
+platform:
+ nodesize: 48
+
+ #manifest:
+ #fullhash: binhash
