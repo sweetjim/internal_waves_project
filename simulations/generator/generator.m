@@ -1,9 +1,10 @@
 %% Script that generates relevant model folders
-
-name_phrase = 'lab_model';
-project_name = 'lm';
+clearvars
+name_phrase = 'lab_model';  % The longhand model title (appears only in model folders)
+project_name = 'lm';        % The shorthand version (appears elsewhere)
 ieee    = 'b' ; 
 accuracy= 'real*8' ; 
+input_location = '/scratch/nm03/js8285/mitgcm_input/';  % Storage location of the field files
 RPS2ms  = 0.0359;
 
 % Grid settings
@@ -12,13 +13,11 @@ ny  = 1;    % pts
 nz  = 300;  % pts
 Lx  = 5;    % m
 H1  = 0.3;  % m
-z   = -linspace(0,H1,nz+1); 
-z   = (z(1:end-1)+z(2:end))/2; 
 
 % Environment settings
 g       = 9.81;             % Gravity (m/s2)
 rho_ref = [1020 1004];      % Top and bottom densities (kg/m3)
-alphaT  = 2e-4;             % Thermal coefficient (1/K)
+alphaT  = 2e-4;             % Thermal coefficient (1/K) (unused in a haline experiment)
 betaS   = 0.71e-3;          % Haline coefficient (1/psu)
 N2      = g/rho_ref(2)*(rho_ref(1)-rho_ref(2))/H1; % Buoyancy frequency squared
 Sref    = 21;               % Bottom haline reference (psu)

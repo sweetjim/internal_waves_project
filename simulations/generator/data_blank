@@ -36,7 +36,7 @@
  tidalForcingU=1.0E-6,
  tidalForcingV=0.0,
  tidalFreq=1.41E-4,
- meanForcingU=0.0, 		
+ meanForcingU=0.0,
  meanForcingV=2E-6,
  gravity=9.81,
  hFacMin=0.1,
