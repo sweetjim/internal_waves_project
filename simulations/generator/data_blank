@@ -21,7 +21,7 @@
  beta=0,
  eosType='LINEAR',
  tAlpha=0,
- sBeta =0.71e-3,
+ sBeta =7.4e-4,
  rhoConst=1026.5,
  rhoNil=1026.5,
  implicitDiffusion=.FALSE.,

@@ -1,0 +1,6 @@
+# Packages
+ &PACKAGES
+ useOBCS=.FALSE.,
+ useRBCS=.FALSE.,
+ useMNC=.TRUE.,
+ &

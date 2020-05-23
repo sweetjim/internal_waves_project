@@ -1,46 +1,60 @@
 %% Topography and variable resolution
 % Draw a varying horizontal resolution that increases near the hills
-
+warning off
+% Space declaration 
 x   = linspace(0,Lx,nx+1);
 z   = -linspace(0,H1,nz+1);
 z   = (z(1:end-1)+z(2:end))/2;
-H   = min(z);
+H   = min(z);                   % Depth of the tank
+
+% Change the timestep to allow maximum parcel displacement to fit within the
+% minimum resolution
+t_max = res/(u+ut);
+
+if deltaT_max>t_max
+    deltaT =  round(t_max/10,2);
+else
+    deltaT = deltaT_max;
+end
 
 n1      = 0:nx-1;
-res     = 0.01; % m
-func    = @(x,x0,w0,h0) h0*exp(-(x-x0).^2/w0);
-res_func = @(n1,nx,x0,x1) 1+tanh((n1-x0*nx)/x1);
+func    = @(x,x0,w0,h0) h0*exp(-(x-x0).^2/w0);  % Hill function (Guassian)
+res_func = @(n1,nx,x0,x1) 1+tanh((n1-x0*nx)/x1);% Resolution function (Tanh)
 
 % Initial setup for first plot
 j       = 1;
 pos     = (Lx/2+[sep+sep_array(j),-sep-sep_array(j)]);  % Position of the hills
-res_pos = 0.5+0.3*(1+4*sep)*[-1 1];     % Bounds of the finest resolution profile
-res_w0  = 50;
+res_pos = 0.5+0.3*(1+4*sep)*[-1 1];                     % Bounds of the finest resolution profile
+res_w0  = 50;                                           % Resolution width
 
 res_space   = res_func(n1,nx,res_pos(1),res_w0)-res_func(n1,nx,res_pos(2),res_w0);
 hill_space  = H+func(x,pos(1),w0,h0)+func(x,pos(2),w0,h0);
 
+% Plot the hills on top of the resolving space
 clf
 subplot(2,2,[1 2])
-yyaxis left
-plot(x,hill_space)
-title('Resolving space')
-ylabel('Height (m)')
-xlabel('Position (m)')
-ylim([H 0])
-xlim([0 Lx])
+    yyaxis left
+    plot(x,hill_space)
+    title('Resolving space')
+    ylabel('Height (m)')
+    xlabel('Position (m)')
+    ylim([H 0])
+    xlim([0 Lx])
 
-dx  = res+(1e-3-res)/2*res_space;
-x   = cumsum(dx)/sum(dx)*Lx;    % Normalize x
+% Draw the resolving space
+dx  = res+(1e-3-res)/2*res_space;   
+x   = cumsum(dx)/sum(dx)*Lx;        % Normalize x
 dx  = diff(x);
-dx  = [dx dx(end)];             % Add missing index
+dx  = [dx dx(end)];                 % Add missing index
 x   = x(1:(nx));
 
-yyaxis right
-plot(x,dx*1e3)
-ylim([min(dx) max(dx)*1.02]*1e3)
-ylabel('Resolution (mm)')
+% Plot the resolving space
+    yyaxis right
+    plot(x,dx*1e3)
+    ylim([min(dx) max(dx)*1.02]*1e3)
+    ylabel('Resolution (mm)')
 
+%% Write the respective models and fields
 for i=1:length(sep_array)
     pos = (Lx/2+[sep+sep_array(i),-sep-sep_array(i)]);
     h   = H+func(x,pos(1),w0,h0)+func(x,pos(2),w0,h0); % Generate hills
@@ -69,12 +83,14 @@ for i=1:length(sep_array)
     [X,Z]   = ndgrid(x,z);
     S       = dSdz*(Z+H1)+Sref; % Isopyncals every ~4.5m
     
-    % initial v, match mean forcing to impulse
+    % Initial v, match mean forcing to impulse
     [X,Z]   = ndgrid(x,z);
     mean    = u;
     omega0  = omega;
     u0      = omega0/(f0^2-omega0^2)*F0 + F0_meanV/f0; % Initial forcing velocity
     
+    % Save a figure with plots of the resolving space, hill seperations,
+    % and salinity/density profiles
     if i==length(sep_array)
         subplot(2,2,4)
         yyaxis left
@@ -95,26 +111,27 @@ for i=1:length(sep_array)
         % Save the figure
         
         figure_name = sprintf('lm%s_figure.png',id);
+        set(gcf, 'Units', 'Normalized', 'OuterPosition', [0, 0.04, 1, 0.96]);
         saveas(gcf,figure_name)
     end
     
     %% Field outputs
     dx_phrase = sprintf('dx_%d_mm.field',round(res*1e3));
-    fid = fopen(dx_phrase, 'w' ,ieee);
-    fwrite(fid,dx,accuracy);
-    fclose(fid);
+        fid = fopen(dx_phrase, 'w' ,ieee);
+        fwrite(fid,dx,accuracy);
+        fclose(fid);
     v0_phrase = sprintf('v0_%d_mm_p_s.field',round(u0*1e3));
-    fid     = fopen(v0_phrase,'w',ieee);
-    fwrite(fid,u0*ones(size(X)),accuracy);
-    fclose(fid);
+        fid     = fopen(v0_phrase,'w',ieee);
+        fwrite(fid,u0*ones(size(X)),accuracy);
+        fclose(fid);
     S_phrase  = sprintf('S_rho_%d_%d.field',round(rho_ref(2)),round(rho_ref(1)));
-    fid     = fopen(S_phrase , 'w' ,ieee); % Change for S.field
-    fwrite(fid,S,accuracy);
-    fclose(fid);
+        fid     = fopen(S_phrase , 'w' ,ieee); % Change for S.field
+        fwrite(fid,S,accuracy);
+        fclose(fid);
     hill_phrase = sprintf('dh_%i_cm.field',sep_phrase);
-    fid = fopen(hill_phrase, 'w' ,ieee);
-    fwrite(fid,h,accuracy);
-    fclose(fid);
+        fid = fopen(hill_phrase, 'w' ,ieee);
+        fwrite(fid,h,accuracy);
+        fclose(fid);
     
     %% Data file inputs
     
