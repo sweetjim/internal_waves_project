@@ -1,0 +1,183 @@
+%% Model comparison
+% Loads in an experimental figure and runs the model solution
+addpath(strcat(cd,'\Lab figures'),strcat(cd,'\altmany-export_fig-d8b9f4a',...
+    strcat(cd,'\functions')))
+%% Import figures
+
+[loadfig,filename] = uigetfile('*.fig','Multiselect','on');
+filedim = length(loadfig);
+
+warning off
+%% Output conditions
+    savefig = false;
+    make_movie  = false;
+    buoyancy    = 1;
+    vertical    = 0;
+    lab         = 1;
+%% Run script
+m = 1;
+clf
+for i=1:filedim
+    if strcmp(loadfig(1),'r')
+        labfig  = openfig(strcat(filename,loadfig),"invisible");
+        filedim = 1;
+    else
+        labfig  = openfig(strcat(filename,loadfig{i}),"invisible");
+    end
+    
+    ax      = get(labfig,'CurrentAxes');
+    width   = ax.XLim(2);
+    depth   = ax.YLim(1);
+    labimage= ax.Children.CData;
+    params  = char(extractAfter(ax.Title.String,'= ['));
+    runnum  = char(extractAfter(ax.Title.String,'Run:'));
+    runnum  = char(extractBefore(runnum,', -'));
+
+    %% Load in variables
+
+    N       = (extractBefore(params,','));
+    omega   = (extractBefore(extractAfter(params,strcat(N,',')),','));
+    u       = (extractBefore(extractAfter(params,strcat(omega,',')),','));
+    ut      = (extractBefore(extractAfter(params,strcat(u,',')),','));
+    if strcmp(ut,'')
+       ut      = (extractBefore(extractAfter(params,strcat(u,',')),']')); 
+    end
+
+    N       = str2double(N);
+    omega   = str2double(omega);
+    u       = -str2double(u)*0.0359;
+    ut      = str2double(ut)*0.0359;
+    
+    title_extension = sprintf(' Run: %s\t(N:%.2f, Omega:%.2f, u:%.2f, ut:%.2f)',...
+        runnum,N,omega,u*1e3,ut*1e3);
+    
+    %% Lab image topography pointers
+
+    [x1,x2] = getPositions(labimage,width);
+    pos = [x2 x1];
+    
+
+    %% Run model
+    run model
+    
+    %% Calculate the beam angle
+
+    h0 = 0.06;
+    w0 = 5.8e-4;
+    N2 = N^2;
+    H1 = 0;
+    k = 0.1/2;
+    sign = -1;
+    
+    [beams,beams_shaded,h] = getBeams(x,pos,u,ut,w0,h0,omega,N2,H1,k,sign);
+    %% Plotting widths and positions
+    % Left monitor position
+    LMx = -900;
+    LMy = 0;
+    figwidth = 500;
+    figheight = 400;
+
+%%  Plot model density anomaly
+    if buoyancy
+        figure(3);
+        
+        subplot(filedim,2,m)
+        max1=squeeze(max(max(sum(anom,3))))*0.9;
+        xl=0.3;
+        pcolor(x,-z-H,squeeze(sum(anom(:,:,:),3))');
+
+        shading flat;
+        cmocean('balance')
+        xlim([xi xf])
+        hold on
+%         patch(cat(2,x,flip(x)),-cat(2,h-H,-H*ones(size(x)))-H,[0.8 0 0])
+        fill(x,h,'k')
+        plotBeams(x,beams,beams_shaded,depth)
+        
+        colorbar
+%         caxis([-max1*(1+0.2) max1*(1+0.2)])
+        caxis([-2.5 2.5])
+        axis ij square
+        
+        title(strcat('Theory ',title_extension))
+        xlabel('x (m)');
+        ylabel('z (m)');
+        cbar = colorbar;
+        cbar.Label.String = ('\Delta \rho (kg/m^3)');
+        set(gca, 'Color', 'none')
+%         set(gcf,'Position',[LMx LMy+600 figwidth figheight])
+%         if savefig
+%         export_fig(strcat('run',runnum,'_bmodel'),'-png','-transparent') 
+%         end
+    end
+        %% Plot model vertical flux
+    if vertical 
+        
+        figure(1)
+        max1    = squeeze(max(max(sum(w,3))))*0.9;
+        pcolor(x,z,squeeze(sum(w(:,:,:),3))');
+        shading flat;
+        cmocean ('balance');
+        xlim ([xi xf])
+        hold on
+        patch(cat(2,x,flip(x)),cat(2,h-H,-H*ones(size(x))),[0 0 0]);
+        cbar = colorbar;
+        caxis([-max1 max1])
+        title('Model')%'w: total (m/s)')
+        % box  on
+        % hold off
+        axis square
+        xlabel('x (m)');
+        ylabel('z (m)');
+        cbar.Label.String = ('w (m/s)');
+        set(gca, 'Color', 'none')
+        set(gcf,'Position',[LMx LMy figwidth figheight])
+        
+        if savefig
+            export_fig(strcat('run',runnum,'_model'),'-png','-transparent') 
+        end
+    end
+    %% Plot lab image with topography overlay
+    if lab
+        figure(3)
+        
+        if buoyancy
+            subplot(filedim,2,m+1)
+        end
+ 
+        imshow(((medfilt2(labimage,7*[1 1]))),imref2d(size(labimage),...
+            [0 width],[depth 0]),...
+            'DisplayRange',[-2.5 2.5]);
+        title('Observed')
+        cbar = colorbar;
+        caxis([-2.5 2.5])
+        cmocean('balance');
+        hold on;
+        plotBeams(x,beams,beams_shaded,depth)
+%         hill = patch(cat(2,x,(x)),cat(2,h-H,-H*ones(size(x))),[0.8 0 0]);
+        fill(x,h,'k')
+
+        hold off;
+        axis xy square
+        xlabel('x (m)');
+        ylabel('z (m)');
+        cbar.Label.String = ('\Delta \rho (kg/m^3)');
+        set(gca, 'Color', 'none')
+        axis ij
+        
+        if savefig
+            if buoyancy
+                export_fig(strcat('run',runnum,'_comparison'),'-png');
+                export_fig(strcat('run',runnum,'_comparison_transparent'),'-png','-transparent' );
+            else
+              set(gcf,'Position',[200 LMy+300 figwidth*2 figheight])
+              export_fig(strcat('run',runnum,'_lab'),'-png','-transparent')
+            end
+        end
+        
+    end
+    if strcmp(loadfig(1),'r')
+       break 
+    end
+    m = m+2;
+end

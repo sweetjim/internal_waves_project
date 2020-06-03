@@ -1,0 +1,276 @@
+%% Explicit linear solutions for dissipating internal waves in a finite-depth fluid
+% Based off Bell 1975, plus dissipation
+% Written by C J Shakespeare, ANU, Canberra, May 2019
+
+
+% tank depth and x (along tank) grid (m)
+% H=0.26;
+% z=linspace(-H,0,50);
+% x=linspace(-10,10,10000);
+% func = @(h,w,x0) h*exp(-(w.*(x-x0)).^2);
+
+% topography height/scale (m)
+% Ks=1/0.0125/2;
+% h = 0.05*exp(-(Ks.*x).^2);
+% h1 = 0.05;      h2=h1;
+% w1 = 40;        w2=w1;
+% x1 = 0.305;     x2=0.605;
+% xi =0;          xf = 0.85;
+
+h = func(h1,w1,x1)+func(h2,w2,x2);
+
+% N=0.75;
+% omega=0.8;
+% u=-0.01;
+% ut=0;
+
+f=0;
+alpha0=0.005*2;
+% make a movie over a tidal period
+% make_movie=1;
+
+
+%% physical parameters
+% buoyancy frequency (/s)
+
+%The input velocity af are in RPS. 
+%Conversion to actual velocity is V=delta/7*af, 
+%with delta=0.2513 m and 7 is the reduction value of the gearbox.
+% constant flow speed (+ve is to the right) m/s
+
+% tidal/oscillatory flow speed m/s 
+
+% tidal frequency (/s)
+%0.82;
+% Coriolis parameter (/s)
+
+% wave decay rate (Rayleigh drag) (/s)
+% this should be tuned to decay the waves before they reach the edge of the
+% domain (otherwise they will wrap around in the FFT)
+% Usually a value an order of magnitude less than the frequencies
+% (N,f,omega) is appropriate
+
+
+%% harmonics to compute (solution will be the sum of these)
+% nf = 3;
+n=linspace(0,nf,nf+1);
+
+%% compute the solution solution
+% complex numbers
+i=complex(0,1);
+
+% topo transform
+[hhat,k]=ffts(h,x(2)-x(1),2, length(x));
+
+
+[K,Z,nn]=ndgrid(k,z,n);
+[Hhat,~,~]=ndgrid(hhat,z,n);
+
+% time zero solutions
+% downstream waves i.e. n*omega-k*u
+w0=Hhat.*i.*(-nn*omega+K*u).*besselj(nn,sqrt((K*ut).^2/omega^2));%.*exp(i*(-nn*omega+K*u)*t);
+m0=-1*-real(abs(K).*sqrt((N.^2-(nn*omega-(K.*u)).^2)./((nn*omega-(K.*u)).^2-f.^2)).*sign(-nn*omega+(K.*u)));    % 
+gamma0=-1*real(alpha0.*m0.*(-nn*omega+K*u).*(2*N^2-(-nn*omega+K*u).^2-f^2)./(N^2-(-nn*omega+K*u).^2)./(f^2-(-nn*omega+K*u).^2)/2); % decay term
+m0((N.^2-(nn*omega-(K.*u)).^2)./((nn*omega-(K.*u)).^2-f.^2)<0)=0; %>0 for attenuating slts.
+
+% upstream waves  i.e. n*omega+k*u
+w1=-Hhat.*i.*(nn*omega+K*u).*besselj(nn,sqrt((K*ut).^2/omega^2));%.*exp(i*(nn*omega+K*u)*t);
+m1=-1*-real(abs(K).*sqrt((N.^2-(nn*omega+(K.*u)).^2)./((nn*omega+(K.*u)).^2-f.^2)).*sign(nn*omega+(K.*u)));
+m1((N.^2-(nn*omega+(K.*u)).^2)./((nn*omega+(K.*u)).^2-f.^2)<0)=0;
+gamma1=-1*real(alpha0.*m1.*(nn*omega+K*u).*(2*N^2-(nn*omega+K*u).^2-f^2)./(N^2-(nn*omega+K*u).^2)./(f^2-(nn*omega+K*u).^2)/2);
+
+
+% total flow
+what0=(exp(i*(-m0.*Z)+gamma0.*(Z-H))-exp(-i*(-m0.*Z)-gamma0.*(Z+H)))./(exp(i*m0.*H-2*gamma0.*H)-exp(-i*m0.*H));
+what1=(exp(i*(-m1.*Z)+gamma1.*(Z-H))-exp(-i*(-m1.*Z)-gamma1.*(Z+H)))./(exp(i*m1.*H-2*gamma1.*H)-exp(-i*m1.*H));
+
+what1(isnan(what1))=0;
+what0(isnan(what0))=0;
+
+what=(w0.*what0+w1.*what1)/2;
+
+% correct n=0 harmonic component
+what(nn==0)=w0(nn==0).*what0(nn==0)*2;
+
+what(isnan(what))=0;
+w=iffts(what,length(x),1,length(x));
+
+% pressure (for energy flux)
+phat0=(exp(i*(-m0.*Z)+gamma0.*(Z-H))+exp(-i*(-m0.*Z)-gamma0.*(Z+H)))./(exp(i*m0.*H-2*gamma0.*H)-exp(-i*m0.*H))./(-i*m0).*(N^2-(-nn*omega+K*u).^2)./(nn*omega-K*u)./i;
+% phat1=(exp(i*(-m1.*Z)+gamma1.*(Z-H))+exp(-i*(-m1.*Z)-gamma1.*(Z+H)))./(exp(i*m1.*H-2*gamma1.*H)-exp(-i*m1.*H))./(-i*m1).*(N^2-(nn*omega+K*u).^2)./(nn*omega+K*u)./i;
+phat1=-(exp(i*(-m1.*Z)+gamma1.*(Z-H))+exp(-i*(-m1.*Z)-gamma1.*(Z+H)))./(exp(i*m1.*H-2*gamma1.*H)-exp(-i*m1.*H))./(-i*m1).*(N^2-(nn*omega+K*u).^2)./(nn*omega+K*u)./i; 
+phat1(isnan(phat1))=0;
+phat1(isinf(abs(phat1)))=0;
+phat0(isnan(phat0))=0;
+phat0(isinf(abs(phat0)))=0;
+
+phat=(w0.*phat0+w1.*phat1)/2;
+phat(nn==0)=w0(nn==0).*phat0(nn==0)*2;
+phat(isnan(phat))=0;
+phat(isinf(abs(phat)))=0;
+p=iffts(phat,length(x),1,length(x));
+
+% tidal lee
+mask0=zeros(size(K));
+mask0((K*u)>(nn*omega+f))=1;
+what_lee=mask0.*w0.*what0;
+what_lee(isnan(what_lee))=0;
+
+w_lee=iffts(what_lee,length(x),1,length(x));
+
+% downstream beam
+what_down=(1-mask0).*w0.*what0;
+what_down(isnan(what_down))=0;
+what_down(nn==0)=0;
+
+w_down=iffts(what_down,length(x),1,length(x));
+
+% upstream beam
+what_up=w1.*what1;
+what_up(isnan(what_up))=0;
+what_up(nn==0)=0;
+
+w_up=iffts(what_up,length(x),1,length(x));
+
+% figure(3)
+% clf;
+% max1=squeeze(max(max(sum(w,3))))*0.9;
+% xl=2;
+% model = pcolor(x,z,squeeze(sum(w(:,:,:),3))');
+%  shading flat;
+%  colormap(pink)
+% xlim([xi xf])
+% hold all
+% hilloverlay = patch(cat(2,x,flip(x)),cat(2,h-H,-H*ones(size(x))),[0 0 0]);
+%  colorbar
+%  caxis([-max1 max1])
+% %   title('w: total (m/s)')
+
+
+
+
+%% plot the solutions - snapshot of w at "time 0"
+% figure(1);
+% clf;
+% max1=squeeze(max(max(sum(w,3))))*0.9;
+% xl=2;
+% for j=1:4
+% subplot(2,2,j)
+% cla()
+% if(j==1)
+%     pcolor(x,z,squeeze(sum(w_up(:,:,:),3))');
+% elseif(j==2)
+%      pcolor(x,z,squeeze(sum(w_down(:,:,:),3))');
+% elseif(j==3)
+%      pcolor(x,z,squeeze(sum(w_lee(:,:,2:end),3))');
+% else
+%      pcolor(x,z,squeeze(sum(w_lee(:,:,1),3))');
+% end
+%  shading flat;
+%  colormap(pink)
+% xlim([-xl xl])
+% hold all
+%  patch(cat(2,x,flip(x)),cat(2,h-H,-H*ones(size(x))),[1 0 0])
+%  colorbar
+%  caxis([-max1 max1])
+%  if(j==1)
+%      title('w: upstream (m/s)')
+%  elseif(j==2)
+%      title('w: downstream')
+%  elseif(j==3)
+%      title('w: tidal lee')
+%  elseif(j==4)
+%      title('w: lee')
+%  end
+% 
+% end
+
+
+%% energy flux (time zero)
+%load redblue;
+% ef=w.*p;
+% cl=squeeze(max(max(abs(sum(ef,3)))));
+% 
+% figure(2)
+% clf;
+% pcolor(x,z,squeeze(sum(ef(:,:,:),3))');shading flat;colorbar
+% xlim([-xl xl])
+% title('energy flux wp/rho0 (m^2/s^3)')
+% colormap(jet)
+% caxis([-cl cl]/2);
+%  patch(cat(2,x,flip(x)),cat(2,h-H,-H*ones(size(x))),[0.2 0 0])
+ 
+ %% time dependent movie for one period
+ if make_movie
+     cotidal_frame=0;
+     tvec=linspace(0,2*pi/omega,30);
+     Wtime=zeros(length(x),length(z),length(n),length(tvec));
+     
+     % solutions above are flow following - need to correct for this in
+     % plots
+    u0=u-ut*cos(omega*tvec);
+%    x0=(x+(u*tvec+(1-cotidal_frame)*ut*sin(omega*tvec)/omega));
+     
+     
+     for ti=1:length(tvec)
+        t=tvec(ti);
+
+        what=(w0.*what0.*exp(i*(-nn*omega+K*u)*t)+w1.*what1.*exp(i*(nn*omega+K*u)*t))/2;
+        what(nn==0)=w0(nn==0).*what0(nn==0).*exp(i*(-nn(nn==0)*omega+K(nn==0)*u)*t)*2;
+        what(isnan(what))=0;
+        tmp=iffts(what,length(x),1,length(x));
+        Wtime(:,:,:,ti)=tmp;
+     end
+     
+     
+     for ti=1:length(tvec)
+         figure(3);
+         clf
+        pcolor((x+(u*tvec(ti)-(1-cotidal_frame)*ut*sin(omega*tvec(ti))/omega)),z,squeeze(sum(Wtime(:,:,:,ti),3))');
+        xlim([xi xf]);
+        shading flat;
+%         colormap(pink)
+        cmocean('balance')
+        title(['Model, t=' num2str(ti/length(tvec)) 'T'])
+        hold all;
+        plot((x-(cotidal_frame*ut*sin(omega*tvec(ti))/omega))/1e3,h/max(h)*100,'color',[1 1 1]/2)
+        set(gca,'fontsize',12)
+        caxis([-1 1]*max1)
+        
+         patch(cat(2,x,flip(x)),cat(2,h-H,-H*ones(size(x))),[1 0 0])
+        
+        pause(0.5);
+         
+     end
+     
+     
+     
+ end
+     
+ 
+ 
+ % b
+%  if buoyancy
+%     b0=w0.*N^2./(i.*(-nn*omega+K*u));          % Buoyancy (continuity eq in fourier space)
+%     b1=w1.*N^2./(i.*(nn*omega+K*u));
+%     bhat=(b0.*what0+b1.*what1)/2;
+%     bhat(isnan(bhat))=0;
+%     b=iffts(bhat,length(x),1,length(x));
+%     drho=b/9.81*rhobot;%1025;
+%      
+%     figure(3);
+%     clf;
+%     max1=squeeze(max(max(sum(drho,3))))*0.9;
+%     xl=0.3;
+%     pcolor(x,-z-H,squeeze(sum(drho(:,:,:),3))');
+% 
+%     shading flat;
+%     colormap(pink)
+%     xlim([xi xf])
+%     hold all
+%     patch(cat(2,x,flip(x)),-cat(2,h-H,-H*ones(size(x)))-H,[0 0 0])
+%     colorbar
+%     caxis([-max1 max1])
+%     
+%  end
+        

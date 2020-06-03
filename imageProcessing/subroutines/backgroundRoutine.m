@@ -1,0 +1,119 @@
+%% Background routine
+
+if isempty(message1)
+       return 
+end
+close;
+ if ~skip2processing
+    path2bgimage = char(strcat(exppath,'\initial'));
+    
+    if ~automate
+        [background,pathname] = uigetfile(fullfile(path2bgimage,'*.tiff'),...
+        'Choose background image');
+    else
+        % Grab all the files in the 'initial' directory and use the last
+        % entry as the working image.
+        background  = dir(fullfile(path2bgimage,'*.tiff'));
+        background  = strcat('\',background(end).name); 
+        pathname    = path2bgimage;
+    end
+   
+    if ~pathname
+        return
+    end
+    
+    bgimage=imread(strcat(pathname,background));
+    bgimage_onecolor=bgimage(:,:,1);
+    cropping = true;
+    
+    while cropping
+    
+        if ~automate
+            % Select the relevant area 
+            title('Select area for cropping');
+            [bgimage_crop,rect] =imcrop(bgimage_onecolor); 
+        else
+            rect = [0.51 536.51 size(bgimage,2) size(bgimage,1)*0.43];
+            [bgimage_crop,rect] =imcrop(bgimage_onecolor,rect); 
+        end
+
+        %% Fix the absorption profile
+
+
+        log_back = log(im2double(bgimage_crop));
+
+        for i=1:size(log_back)
+            if isinf(log_back(i))
+                log_back(i) = nan; % remove any nans
+            end
+        end
+
+        intensity       = log_back;
+        depth_array     = -linspace(0,depth,size(intensity,1));
+        length_array    =  linspace(0,width,size(intensity,2));
+
+        % Define the density sample locations relative to the image's verical index
+        zbotrho         = 1;
+        ztoprho         = size(intensity,1);
+
+        % Take an intensity profile across a region of width 'n' near the middle position
+        middle          = floor(size(intensity,2)/2);
+        n               = 50;
+        intensityAverage= mean(log_back(:,middle-n:middle+n),2);
+
+        % Plotting
+
+        h = figure;
+        subplot(2,1,1)
+        plot(intensityAverage,depth_array);
+        title('Averaged intensity from center region')
+        ylabel('Depth (m)')
+        xlabel('I(x)/I(x_0)')
+
+        % Construct an intensity to density parameter 'beta' (gradient term)
+        beta            = (rhobot-rhotop)/(intensityAverage(zbotrho)-intensityAverage(end));
+        botref          = intensityAverage(zbotrho);
+
+        rho             = rhotop+beta.*(-intensity+botref);
+
+        % Plot background density
+        subplot(2,1,2)
+        imshow(rho);
+        xlabel('\rho (kg/m^3)');ylabel('z (m)');
+        imshow(rho,imref2d(size(rho),[0 width],[0 depth]),...
+                'DisplayRange',[rhotop rhobot]);
+        cmocean('thermal');
+        cbar = colorbar;
+        cbar.Label.String = ('\Delta \rho (kg/m^3)');
+        title('Apparent background density');
+        xlabel ('x (m)');
+        ylabel ('z (m)');   
+    
+        batch_prompt = questdlg('Re-crop the image?', ...
+        'Background processing', ...
+        'Yes','No','Cancel');
+
+        switch batch_prompt
+            case 'Yes'
+                disp('Re-cropping.')
+            case 'No'
+                disp('Continuing.')
+                break
+        end
+
+        if isempty(batch_prompt)
+            disp('Stopping script')
+            return
+        end
+        
+    end
+    %% Save workspace and figure
+
+    save(savingpath);
+    savefig(h,strcat(extractBefore(savingpath,'workspace.mat'),'densityFigs.fig'));
+    
+    disp('Close the figure to continue.')
+    uiwait(h)
+end
+    
+    

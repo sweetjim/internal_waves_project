@@ -1,0 +1,261 @@
+%% Explicit linear solutions for dissipating internal waves in a finite-depth fluid
+% As described in Dossmann et al, 2020.
+
+% tank depth and x (along tank) grid (m)
+H=0.26;
+z=linspace(-H,0,50);
+x=linspace(-10,10,10000);
+
+% topography height/scale (m)
+Ks=1/0.05;
+h = 0.05*exp(-(Ks.*x).^2);
+
+%% physical parameters
+% buoyancy frequency (/s)
+N=0.64;
+% constant flow speed (+ve is to the right) m/s
+u=0.002;
+% tidal/oscillatory flow speed m/s 
+ut=0.02;
+% tidal frequency (/s)
+omega=2*pi/14;%0.82;
+% Coriolis parameter (/s)
+f=0;
+% wave decay rate (Rayleigh drag) (/s)
+% this should be tuned to decay the waves before they reach the edge of the
+% domain (otherwise they will wrap around in the FFT)
+% Usually a value an order of magnitude less than the frequencies
+% (N,f,omega) is appropriate
+alpha0=0.005*2;
+
+%% harmonics to compute (solution will be the sum of these)
+n=0:6;
+
+%% compute the solution solution
+% complex numbers
+i=complex(0,1);
+
+% topo transform
+[hhat,k]=ffts(h,x(2)-x(1),2, length(x));
+
+% grids
+[K,Z,nn]=ndgrid(k,z,n);
+[Hhat,~,~]=ndgrid(hhat,z,n);
+
+% downstream waves i.e. -n*omega+k*u  (n<=0)
+OMEGA0=-nn*omega+K*u;
+% the topo boundary condition
+w0=Hhat.*i.*OMEGA0.*besselj(-nn,(K*ut)/omega);
+% the vertical wavenumber
+m0=real(abs(K).*sqrt((N.^2-(OMEGA0).^2)./(OMEGA0.^2-f.^2)).*sign(OMEGA0));
+% make zero evanescent solutions
+m0((N.^2-OMEGA0.^2)./(OMEGA0.^2-f.^2)<0)=0;
+% the decay rate
+gamma0=real(alpha0.*m0.*OMEGA0.*(2*N^2-OMEGA0.^2-f^2)./(N^2-OMEGA0.^2)./(f^2-OMEGA0.^2)/2);
+
+
+% upstream waves  i.e. n*omega+k*u  (n>=0)
+OMEGA1=nn*omega+K*u;
+% the topo boundary condition
+w1=Hhat.*i.*OMEGA1.*besselj(nn,(K*ut)/omega);
+% the vertical wavenumber
+m1=real(abs(K).*sqrt((N.^2-OMEGA1.^2)./(OMEGA1.^2-f.^2)).*sign(OMEGA1));
+% make zero evanescent solutions
+m0((N.^2-OMEGA1.^2)./(OMEGA1.^2-f.^2)<0)=0;
+% the decay rate
+gamma1=real(alpha0.*m1.*OMEGA1.*(2*N^2-OMEGA1.^2-f^2)./(N^2-OMEGA1.^2)./(f^2-OMEGA1.^2)/2);
+
+% depth dependence of flow (what=1 at Z=-H and what=0 at Z=0)
+what0=(exp(-i*(m0.*Z)-gamma0.*(Z-H))-exp(i*(m0.*Z)+gamma0.*(Z+H)))./(exp(i*m0.*H+2*gamma0.*H)-exp(-i*m0.*H));
+what1=(exp(-i*(m1.*Z)-gamma1.*(Z-H))-exp(i*(m1.*Z)+gamma1.*(Z+H)))./(exp(i*m1.*H+2*gamma1.*H)-exp(-i*m1.*H));
+what1(isnan(what1))=0;
+what0(isnan(what0))=0;
+
+% sum the upstream (n<=0) and  downstream (n=>0) to give net
+what=(w0.*what0+w1.*what1);
+% correct n=0 harmonic component - it is a duplicated when summing n>=0 and n<=0
+what(nn==0)=w0(nn==0).*what0(nn==0);
+what(isnan(what))=0;
+% calculate IFFT
+w=iffts(what,length(x),1,length(x));
+
+% pressure - same procedure as above.
+phat0=-(exp(-i*(m0.*Z)-gamma0.*(Z-H))+exp(i*(m0.*Z)+gamma0.*(Z+H)))./(exp(i*m0.*H+2*gamma0.*H)-exp(-i*m0.*H))./(m0).*(N^2-OMEGA0.^2)./(OMEGA0);
+phat1=-(exp(-i*(m1.*Z)-gamma1.*(Z-H))+exp(i*(m1.*Z)+gamma1.*(Z+H)))./(exp(i*m1.*H+2*gamma1.*H)-exp(-i*m1.*H))./(m1).*(N^2-OMEGA1.^2)./(OMEGA1);
+phat1(isnan(phat1))=0;
+phat1(isinf(abs(phat1)))=0;
+phat0(isnan(phat0))=0;
+phat0(isinf(abs(phat0)))=0;
+
+phat=(w0.*phat0+w1.*phat1);
+phat(nn==0)=w0(nn==0).*phat0(nn==0);
+phat(isnan(phat))=0;
+phat(isinf(abs(phat)))=0;
+p=iffts(phat,length(x),1,length(x));
+
+% tidal lee
+mask0=zeros(size(K));
+mask0((K*u)>(nn*omega+f))=1;
+what_lee=mask0.*w0.*what0;
+what_lee(isnan(what_lee))=0;
+w_lee=iffts(what_lee,length(x),1,length(x));
+
+% downstream beam
+what_down=(1-mask0).*w0.*what0;
+what_down(isnan(what_down))=0;
+what_down(nn==0)=0;
+w_down=iffts(what_down,length(x),1,length(x));
+
+% upstream beam
+what_up=w1.*what1;
+what_up(isnan(what_up))=0;
+what_up(nn==0)=0;
+w_up=iffts(what_up,length(x),1,length(x));
+
+b0=w0.*N^2./(i.*(OMEGA0));          % Buoyancy (continuity eq in fourier space)
+b1=w1.*N^2./(i.*(OMEGA1));
+bhat=(b0.*what0+b1.*what1);
+% bhat(isnan(bhat))=0;
+
+bhat(nn==0)=w0(nn==0).*bhat0(nn==0);
+bhat(isnan(bhat))=0;
+bhat(isinf(abs(bhat)))=0;
+
+b=iffts(bhat,length(x),1,length(x));
+drho=b/9.81*rhobot;%1025;
+
+figure(3)
+clf;
+max1=squeeze(max(max(sum(w,3))))*0.9;
+xl=2;
+pcolor(x,z,squeeze(sum(w(:,:,:),3))');
+ shading flat;
+ colormap(pink)
+xlim([-xl xl])
+hold all
+ patch(cat(2,x,flip(x)),cat(2,h-H,-H*ones(size(x))),[1 0 0])
+ colorbar
+ caxis([-max1 max1])
+  title('w: total (m/s)')
+
+
+
+
+%% plot the solutions - snapshot of w at "time 0"
+figure(1);
+clf;
+max1=squeeze(max(max(sum(w,3))))*0.9;
+xl=2;
+for j=1:4
+subplot(2,2,j)
+cla()
+if(j==1)
+    pcolor(x,z,squeeze(sum(w_up(:,:,:),3))');
+elseif(j==2)
+     pcolor(x,z,squeeze(sum(w_down(:,:,:),3))');
+elseif(j==3)
+     pcolor(x,z,squeeze(sum(w_lee(:,:,2:end),3))');
+else
+     pcolor(x,z,squeeze(sum(w_lee(:,:,1),3))');
+end
+ shading flat;
+ colormap(pink)
+xlim([-xl xl])
+hold all
+ patch(cat(2,x,flip(x)),cat(2,h-H,-H*ones(size(x))),[1 0 0])
+ colorbar
+ caxis([-max1 max1])
+ if(j==1)
+     title('w: upstream (m/s)')
+ elseif(j==2)
+     title('w: downstream')
+ elseif(j==3)
+     title('w: tidal lee')
+ elseif(j==4)
+     title('w: lee')
+ end
+
+end
+
+
+%% energy flux (time zero)
+ef=w.*p;
+cl=squeeze(max(max(abs(sum(ef,3)))))*1000;
+
+figure(2)
+clf;
+pcolor(x,z,1000*squeeze(sum(ef(:,:,:),3))');shading flat;colorbar
+xlim([-xl xl])
+title('Instantaneous energy flux wp (W/m^2)')
+colormap(jet)
+caxis([-cl cl]/2);
+ patch(cat(2,x,flip(x)),cat(2,h-H,-H*ones(size(x))),[0.2 0 0])
+ 
+%% energy flux averaged over tidal period
+nt=20;
+cotidal_frame=1;
+tvec=linspace(0,2*pi/omega,nt);
+tvec=tvec(1:end-1);
+Wtime=zeros(length(x),length(z),length(n),length(tvec));
+Ptime=zeros(length(x),length(z),length(n),length(tvec));
+
+for ti=1:length(tvec)
+    t=tvec(ti);
+
+    what=(w0.*what0.*exp(i*OMEGA0*t)+w1.*what1.*exp(i*OMEGA1*t));
+    what(nn==0)=(w0(nn==0).*what0(nn==0)).*exp(i*(K(nn==0)*u)*t);
+    % if moving with the tide, but not mean flow
+    if(cotidal_frame)
+        what=what.*exp(-i*K*u*t);
+    end
+    what(isnan(what))=0;
+    tmp=iffts(what,length(x),1,length(x));
+    Wtime(:,:,:,ti)=tmp;
+
+    what=(w0.*phat0.*exp(i*OMEGA0*t)+w1.*phat1.*exp(i*OMEGA1*t));
+    what(nn==0)=(w0(nn==0).*phat0(nn==0)).*exp(i*(K(nn==0)*u)*t);
+    what(isnan(what))=0;
+     % if moving with the tide, but not mean flow
+    if(cotidal_frame)
+        what=what.*exp(-i*K*u*t);
+    end
+    tmp=iffts(what,length(x),1,length(x));
+    Ptime(:,:,:,ti)=tmp;
+end
+
+% energy flux
+ef1=squeeze(sum(Wtime.*Ptime*1000,3));
+
+
+% average in hill frame
+[X,Z,T]=meshgrid(x,z,tvec);
+% Hill position in flow following coordinate
+x1=X-ut/omega*sin(omega*T);
+% interpolate flux field to actual hill position.
+ef2=interp3(X,Z,T,permute(ef1,[2 1 3]),x1,Z,T);
+% now we can average relative to the hill (hill fixed at z=0);
+
+
+figure(5)
+subplot(2,4,[1 2 3])
+pcolor(x,z,squeeze(mean(ef1,3))');
+shading flat;colorbar
+xlim([-xl xl])
+title('Period-averaged energy flux wp (W/m^2): co-tidal')
+colormap(copper)
+patch(cat(2,x,flip(x)),cat(2,h-H,-H*ones(size(x))),[0.2 0 0])
+
+subplot(2,4,4)
+plot(sum(squeeze(sum(mean(Wtime.*Ptime*1000*(x(2)-x(1)),4),3)),1),z,'-k')
+ axis tight
+ grid on
+ xlabel('total (W/m)')
+     
+ 
+subplot(2,4,[5 6 7])
+pcolor(x,z,squeeze(mean(ef2,3)));
+shading flat;colorbar
+xlim([-xl xl])
+title('Period-averaged energy flux wp (W/m^2) : Eulerian')
+colormap(copper)
+%patch(cat(2,x,flip(x)),cat(2,h-H,-H*ones(size(x))),[0.2 0 0])

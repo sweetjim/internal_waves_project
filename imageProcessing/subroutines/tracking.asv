@@ -1,0 +1,69 @@
+%% Tracking subroutine
+
+% Tracking of topography
+        if temp
+            yslice  = 80; 
+            xitemp  = find(isnan(den(yslice,:))>0,1,'first');   % Find the left most nan
+            xftemp  = find(isnan(den(yslice,:))>0,1,'last');    % Find the right most nan
+            rtemp   = floor(size(den,2)*cropsize/2);    % Define a constant frame width
+            mtemp   = floor(xftemp+xitemp)/2;                   % Define the midpoint
+
+            % Triggering new crop conditions
+            cond1   = sum(isnan(den(yslice,:)))>350;            % When the number of nans exceeds two hills
+            cond2   = xitemp-rtemp>0;                           % When the radius is greater than one hill
+            cond3   = mtemp-rtemp>1;                            % When the xmin cropping rectangle enters the image
+            cond4   = mtemp+rtemp<size(den,2);                  % When the width cropping rectangle exits the image
+
+            allcond = cond1+cond2+cond3+cond4 == 4;
+
+            if isempty(allcond)
+               allcond = false; 
+            end
+        end
+
+        if allcond                      % Starting conditions
+            startTracking   = true;
+            temp            = false;    % Stop temp section
+            if isempty(si)
+                si = im;                % Define start index
+                in = 1;
+            end
+        else
+            startTracking   = false;
+        end
+
+        if startTracking
+            xi(in)      = max(find(isnan(den(yslice,:))>0,5,'first'));
+            xf(in)      = min(find(isnan(den(yslice,:))>0,5,'last'));
+            midpt(in)   = floor((xf(in)+xi(in))/2); 
+
+            % Define a constant radius 'r' from the midpoint of the two
+            % hills and a cropping width that encompasses both.
+            if in==1
+                r       = rtemp;%floor((xf(in)-xi(in))/4); 
+                wide    = r*3; 
+            end
+            % crop rect: [xmin ymin width height] 
+
+            % Break if 'r' exceeds the original image's frame
+            if xf(in)+r>size(den,2)
+               break 
+            end
+
+            % Define the cropping rectangle
+            xmin        = midpt(in)-4*r;
+            newcrop     = [xmin 1 wide size(den,2)];
+
+            % Define new x-axis limits
+            newxticks = size(imcrop(den,newcrop),2)/size(den,2)*width;
+
+            % Plotting
+            getProcessedImage(den,newcrop,newxticks)
+            
+            % Figure handling and frame saving
+            fig = gcf;
+            fig.PaperPosition = newcrop;
+            imageframes(in) = getframe(fig); 
+
+            in = in+1;
+        end

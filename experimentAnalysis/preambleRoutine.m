@@ -61,6 +61,6 @@ else
 end
 
 experiment_path = {(name{selected_runs+1,1})};
-
+endim           = length(selected_runs);
 % Define saving path
-savingpath = strcat(cd,'experimentAnalysis\timeAverages\');
+savingpath = strcat(cd,'\experimentAnalysis\timeAverages\');
